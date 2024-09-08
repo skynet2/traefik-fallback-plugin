@@ -137,6 +137,8 @@ func (f *Fallback) handler() http.Handler {
 		for name, values := range recorder.Header() {
 			rw.Header()[name] = values
 		}
+		rw.WriteHeader(recorder.StatusCode)
+
 		//if recorder.Header().Get("Content-Encoding") == "gzip" {
 		//	data, err := gUnzipData(recorder.Body.Bytes())
 		//	if err != nil {
