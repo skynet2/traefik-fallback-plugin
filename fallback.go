@@ -15,6 +15,7 @@ type Config struct {
 	FallbackOnStatusCodes string `json:"fallbackOnStatusCodes,omitempty"`
 	FallbackURL           string `json:"fallbackURL,omitempty"`
 	FallbackStatusCode    string `json:"fallbackStatusCode"`
+	FallbackContentType   string `json:"fallbackContentType,omitempty"`
 	UpstreamTimeout       string `json:"upstreamTimeout,omitempty"`
 }
 
@@ -25,13 +26,14 @@ func CreateConfig() *Config {
 
 // Fallback plugin.
 type Fallback struct {
-	next               http.Handler
-	name               string
-	fallbackURL        string
-	fallbackCodes      map[int]struct{}
-	ctx                context.Context
-	fallbackStatusCode int
-	timeout            time.Duration
+	next                http.Handler
+	name                string
+	fallbackURL         string
+	fallbackCodes       map[int]struct{}
+	ctx                 context.Context
+	fallbackStatusCode  int
+	timeout             time.Duration
+	fallbackContentType string
 }
 
 // New created a new Demo plugin.
@@ -48,7 +50,7 @@ func New(ctx context.Context, next http.Handler, config *Config, name string) (h
 
 	statusCode, err := strconv.Atoi(config.FallbackStatusCode)
 	if err != nil {
-		return nil, fmt.Errorf("invalid status code: %s", config.FallbackStatusCode)
+		return nil, fmt.Errorf("invalid fallback status code: %s", config.FallbackStatusCode)
 	}
 
 	timeout, err := time.ParseDuration(config.UpstreamTimeout)
@@ -61,13 +63,14 @@ func New(ctx context.Context, next http.Handler, config *Config, name string) (h
 	}
 
 	return &Fallback{
-		fallbackURL:        config.FallbackURL,
-		next:               next,
-		name:               name,
-		fallbackCodes:      statusCodes,
-		fallbackStatusCode: statusCode,
-		timeout:            timeout,
-		ctx:                ctx,
+		fallbackURL:         config.FallbackURL,
+		next:                next,
+		name:                name,
+		fallbackCodes:       statusCodes,
+		fallbackStatusCode:  statusCode,
+		timeout:             timeout,
+		ctx:                 ctx,
+		fallbackContentType: config.FallbackContentType,
 	}, nil
 }
 
@@ -109,7 +112,12 @@ func (f *Fallback) handler() http.Handler {
 
 			rw.WriteHeader(f.fallbackStatusCode)
 			_, _ = rw.Write(fallBackData.Body)
-			rw.Header().Set("Content-Type", fallBackData.ContentType)
+
+			if f.fallbackContentType != "" {
+				rw.Header().Set("Content-Type", f.fallbackContentType)
+			} else {
+				rw.Header().Set("Content-Type", fallBackData.ContentType)
+			}
 
 			return
 		}
@@ -117,10 +125,8 @@ func (f *Fallback) handler() http.Handler {
 		rw.WriteHeader(recorder.Code)
 		_, _ = rw.Write(recorder.Body.Bytes())
 
-		targetHeaders := rw.Header()
-
 		for name, values := range recorder.Header() {
-			targetHeaders[name] = values
+			rw.Header().Set(name, values[0])
 		}
 	})
 }
