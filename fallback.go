@@ -3,7 +3,6 @@ package traefik_fallback_plugin
 import (
 	"context"
 	"fmt"
-	"log"
 	"net/http"
 	"net/http/httptest"
 	"strconv"
@@ -112,7 +111,6 @@ func (f *Fallback) handler() http.Handler {
 			}
 
 			rw.WriteHeader(f.fallbackStatusCode)
-			_, _ = rw.Write(fallBackData.Body)
 
 			if f.fallbackContentType != "" {
 				rw.Header().Set("Content-Type", f.fallbackContentType)
@@ -120,12 +118,13 @@ func (f *Fallback) handler() http.Handler {
 				rw.Header().Set("Content-Type", fallBackData.ContentType)
 			}
 
+			_, _ = rw.Write(fallBackData.Body)
+
 			return
 		}
 
 		for name, values := range recorder.Header() {
 			rw.Header()[name] = values
-			log.Printf("Header: %s: %s", name, values)
 		}
 
 		rw.WriteHeader(recorder.Code)
