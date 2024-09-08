@@ -56,5 +56,5 @@ func getFromURL(ctx context.Context, targetURL string, timeout time.Duration) (*
 		ContentType: resp.Header.Get("Content-Type"),
 	}
 
-	return nil, nil
+	return cachedRecord, nil
 }
