@@ -6,9 +6,7 @@ import (
 	"context"
 	"fmt"
 	"io"
-	"log"
 	"net/http"
-	"net/http/httptest"
 	"strconv"
 	"strings"
 	"time"
@@ -89,7 +87,9 @@ func (f *Fallback) handler() http.Handler {
 			return
 		}
 
-		recorder := httptest.NewRecorder()
+		//recorder := httptest.NewRecorder()
+
+		recorder := &Writer{}
 
 		ctx, cancel := context.WithTimeout(f.ctx, f.timeout)
 		hasResponse := false
@@ -104,7 +104,7 @@ func (f *Fallback) handler() http.Handler {
 
 		ctx = f.ctx // swap context
 
-		_, ok := f.fallbackCodes[recorder.Code]
+		_, ok := f.fallbackCodes[recorder.StatusCode]
 
 		if !hasResponse || ok { // fallback
 			fallBackData, err := getFromURL(ctx, f.fallbackURL, f.timeout)
@@ -126,15 +126,14 @@ func (f *Fallback) handler() http.Handler {
 			return
 		}
 
-		rw.WriteHeader(recorder.Code)
+		rw.WriteHeader(recorder.StatusCode)
 		for name, values := range recorder.Header() {
 			rw.Header()[name] = values
-			log.Printf("Header: %s: %s", name, values)
 		}
-
-		rw.Header().Del("Content-Encoding")
-		rw.Header().Del("Content-Length")
-		_, _ = rw.Write(recorder.Body.Bytes())
+		//
+		//rw.Header().Del("Content-Encoding")
+		//rw.Header().Del("Content-Length")
+		_, _ = rw.Write(recorder.Buf.Bytes())
 
 		//if recorder.Header().Get("Content-Encoding") == "gzip" {
 		//	data, err := gUnzipData(recorder.Body.Bytes())
