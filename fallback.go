@@ -6,7 +6,10 @@ import (
 	"context"
 	"fmt"
 	"io"
+	"log"
 	"net/http"
+	"net/http/httptest"
+	"reflect"
 	"strconv"
 	"strings"
 	"time"
@@ -87,9 +90,7 @@ func (f *Fallback) handler() http.Handler {
 			return
 		}
 
-		//recorder := httptest.NewRecorder()
-
-		recorder := &Writer{}
+		recorder := httptest.NewRecorder()
 
 		ctx, cancel := context.WithTimeout(f.ctx, f.timeout)
 		hasResponse := false
@@ -104,7 +105,7 @@ func (f *Fallback) handler() http.Handler {
 
 		ctx = f.ctx // swap context
 
-		_, ok := f.fallbackCodes[recorder.StatusCode]
+		_, ok := f.fallbackCodes[recorder.Code]
 
 		if !hasResponse || ok { // fallback
 			fallBackData, err := getFromURL(ctx, f.fallbackURL, f.timeout)
@@ -126,36 +127,34 @@ func (f *Fallback) handler() http.Handler {
 			return
 		}
 
-		rw.WriteHeader(recorder.StatusCode)
+		rw.WriteHeader(recorder.Code)
 		for name, values := range recorder.Header() {
 			rw.Header()[name] = values
+			log.Printf("Header: %s: %s", name, values)
 		}
-		//
-		//rw.Header().Del("Content-Encoding")
-		//rw.Header().Del("Content-Length")
-		_, _ = rw.Write(recorder.Buf.Bytes())
-		for name, values := range recorder.Header() {
-			rw.Header()[name] = values
-		}
-		rw.WriteHeader(recorder.StatusCode)
 
-		//if recorder.Header().Get("Content-Encoding") == "gzip" {
-		//	data, err := gUnzipData(recorder.Body.Bytes())
-		//	if err != nil {
-		//		rw.WriteHeader(http.StatusTeapot)
-		//		_, _ = rw.Write([]byte(err.Error()))
-		//		return
-		//	}
-		//
-		//	log.Printf("Body UnGziped: %s", string(data))
-		//
-		//	_, _ = rw.Write(data)
-		//	return
-		//} else {
-		//	log.Printf("Body: %s", recorder.Body.String())
-		//
-		//	_, _ = rw.Write(recorder.Body.Bytes())
-		//}
+		if recorder.Header().Get("Content-Encoding") == "gzip" {
+			data, err := gUnzipData(recorder.Body.Bytes())
+			if err != nil {
+				rw.WriteHeader(http.StatusTeapot)
+				_, _ = rw.Write([]byte(err.Error()))
+				return
+			}
+
+			log.Print(reflect.TypeOf(rw).String())
+			//log.Printf("Body UnGziped: %s", string(data))
+
+			rw.Header().Del("Content-Encoding")
+			rw.Header().Del("Content-Length")
+			_, _ = rw.Write(data)
+			return
+		} else {
+			//log.Printf("Body: %s", recorder.Body.String())
+
+			_, _ = rw.Write(recorder.Body.Bytes())
+		}
+
+		//rw.Header().Set("Content-Type", "text/html; charset=utf-8")
 	})
 }
 
