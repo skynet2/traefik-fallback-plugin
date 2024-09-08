@@ -123,12 +123,12 @@ func (f *Fallback) handler() http.Handler {
 		}
 
 		rw.WriteHeader(recorder.Code)
-		_, _ = rw.Write(recorder.Body.Bytes())
-
 		for name, values := range recorder.Header() {
 			rw.Header()[name] = values
 		}
 
-		rw.Header().Set("Content-Type", "text/html; charset=utf-8")
+		_, _ = rw.Write(recorder.Body.Bytes())
+
+		//rw.Header().Set("Content-Type", "text/html; charset=utf-8")
 	})
 }
