@@ -1,11 +1,8 @@
 package traefik_fallback_plugin
 
 import (
-	"bytes"
-	"compress/gzip"
 	"context"
 	"fmt"
-	"io"
 	"log"
 	"net/http"
 	"net/http/httptest"
@@ -133,48 +130,5 @@ func (f *Fallback) handler() http.Handler {
 
 		rw.WriteHeader(recorder.Code)
 		_, _ = rw.Write(recorder.Body.Bytes())
-
-		//if recorder.Header().Get("Content-Encoding") == "gzip" {
-		//	data, err := gUnzipData(recorder.Body.Bytes())
-		//	if err != nil {
-		//		rw.WriteHeader(http.StatusTeapot)
-		//		_, _ = rw.Write([]byte(err.Error()))
-		//		return
-		//	}
-		//
-		//	log.Print(reflect.TypeOf(rw).String())
-		//	//log.Printf("Body UnGziped: %s", string(data))
-		//
-		//	rw.Header().Del("Content-Encoding")
-		//	rw.Header().Del("Content-Length")
-		//	_, _ = rw.Write(data)
-		//	return
-		//} else {
-		//	//log.Printf("Body: %s", recorder.Body.String())
-		//
-		//	_, _ = rw.Write(recorder.Body.Bytes())
-		//}
-
-		//rw.Header().Set("Content-Type", "text/html; charset=utf-8")
 	})
-}
-
-func gUnzipData(data []byte) (resData []byte, err error) {
-	b := bytes.NewBuffer(data)
-
-	var r io.Reader
-	r, err = gzip.NewReader(b)
-	if err != nil {
-		return
-	}
-
-	var resB bytes.Buffer
-	_, err = resB.ReadFrom(r)
-	if err != nil {
-		return
-	}
-
-	resData = resB.Bytes()
-
-	return
 }
