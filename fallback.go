@@ -132,27 +132,27 @@ func (f *Fallback) handler() http.Handler {
 			log.Printf("Header: %s: %s", name, values)
 		}
 
-		if recorder.Header().Get("Content-Encoding") == "gzip" {
-			data, err := gUnzipData(recorder.Body.Bytes())
-			if err != nil {
-				rw.WriteHeader(http.StatusTeapot)
-				_, _ = rw.Write([]byte(err.Error()))
-				return
-			}
+		rw.Header().Del("Content-Encoding")
+		rw.Header().Del("Content-Length")
+		_, _ = rw.Write(recorder.Body.Bytes())
 
-			log.Printf("Body UnGziped: %s", string(data))
-
-			rw.Header().Del("Content-Encoding")
-			rw.Header().Del("Content-Length")
-			_, _ = rw.Write(data)
-			return
-		} else {
-			log.Printf("Body: %s", recorder.Body.String())
-
-			_, _ = rw.Write(recorder.Body.Bytes())
-		}
-
-		//rw.Header().Set("Content-Type", "text/html; charset=utf-8")
+		//if recorder.Header().Get("Content-Encoding") == "gzip" {
+		//	data, err := gUnzipData(recorder.Body.Bytes())
+		//	if err != nil {
+		//		rw.WriteHeader(http.StatusTeapot)
+		//		_, _ = rw.Write([]byte(err.Error()))
+		//		return
+		//	}
+		//
+		//	log.Printf("Body UnGziped: %s", string(data))
+		//
+		//	_, _ = rw.Write(data)
+		//	return
+		//} else {
+		//	log.Printf("Body: %s", recorder.Body.String())
+		//
+		//	_, _ = rw.Write(recorder.Body.Bytes())
+		//}
 	})
 }
 
