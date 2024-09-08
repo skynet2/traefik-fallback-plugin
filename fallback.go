@@ -9,7 +9,6 @@ import (
 	"log"
 	"net/http"
 	"net/http/httptest"
-	"reflect"
 	"strconv"
 	"strings"
 	"time"
@@ -127,32 +126,34 @@ func (f *Fallback) handler() http.Handler {
 			return
 		}
 
-		rw.WriteHeader(recorder.Code)
 		for name, values := range recorder.Header() {
 			rw.Header()[name] = values
 			log.Printf("Header: %s: %s", name, values)
 		}
 
-		if recorder.Header().Get("Content-Encoding") == "gzip" {
-			data, err := gUnzipData(recorder.Body.Bytes())
-			if err != nil {
-				rw.WriteHeader(http.StatusTeapot)
-				_, _ = rw.Write([]byte(err.Error()))
-				return
-			}
+		rw.WriteHeader(recorder.Code)
+		_, _ = rw.Write(recorder.Body.Bytes())
 
-			log.Print(reflect.TypeOf(rw).String())
-			//log.Printf("Body UnGziped: %s", string(data))
-
-			rw.Header().Del("Content-Encoding")
-			rw.Header().Del("Content-Length")
-			_, _ = rw.Write(data)
-			return
-		} else {
-			//log.Printf("Body: %s", recorder.Body.String())
-
-			_, _ = rw.Write(recorder.Body.Bytes())
-		}
+		//if recorder.Header().Get("Content-Encoding") == "gzip" {
+		//	data, err := gUnzipData(recorder.Body.Bytes())
+		//	if err != nil {
+		//		rw.WriteHeader(http.StatusTeapot)
+		//		_, _ = rw.Write([]byte(err.Error()))
+		//		return
+		//	}
+		//
+		//	log.Print(reflect.TypeOf(rw).String())
+		//	//log.Printf("Body UnGziped: %s", string(data))
+		//
+		//	rw.Header().Del("Content-Encoding")
+		//	rw.Header().Del("Content-Length")
+		//	_, _ = rw.Write(data)
+		//	return
+		//} else {
+		//	//log.Printf("Body: %s", recorder.Body.String())
+		//
+		//	_, _ = rw.Write(recorder.Body.Bytes())
+		//}
 
 		//rw.Header().Set("Content-Type", "text/html; charset=utf-8")
 	})
