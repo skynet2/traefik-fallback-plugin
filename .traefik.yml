@@ -7,6 +7,7 @@ import: github.com/skynet2/traefik-fallback-plugin
 summary: 'Traefik Fallback Plugin'
 
 testData:
-  FallbackOnStatusCodes: "500,504"
-  FallbackURL: "http://fallback"
-  ExpectedStatusCode: "201"
+  fallbackOnStatusCodes: "500,504"
+  fallbackURL: "http://fallback"
+  fallbackStatusCode: "201"
+  upstreamTimeout: "10s"

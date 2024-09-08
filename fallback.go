@@ -6,14 +6,16 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"strconv"
+	"strings"
 	"time"
 )
 
 // Config the plugin configuration.
 type Config struct {
-	FallbackOnStatusCodes []string `json:"fallbackOnStatusCodes,omitempty"`
-	FallbackURL           string   `json:"fallbackURL,omitempty"`
-	ExpectedStatusCode    string   `json:"expectedStatusCode,omitempty"`
+	FallbackOnStatusCodes string `json:"fallbackOnStatusCodes,omitempty"`
+	FallbackURL           string `json:"fallbackURL,omitempty"`
+	FallbackStatusCode    string `json:"fallbackStatusCode"`
+	UpstreamTimeout       string `json:"upstreamTimeout,omitempty"`
 }
 
 // CreateConfig creates the default plugin configuration.
@@ -23,18 +25,20 @@ func CreateConfig() *Config {
 
 // Fallback plugin.
 type Fallback struct {
-	next          http.Handler
-	name          string
-	fallbackURL   string
-	fallbackCodes map[int]struct{}
-	ctx           context.Context
+	next               http.Handler
+	name               string
+	fallbackURL        string
+	fallbackCodes      map[int]struct{}
+	ctx                context.Context
+	fallbackStatusCode int
+	timeout            time.Duration
 }
 
 // New created a new Demo plugin.
 func New(ctx context.Context, next http.Handler, config *Config, name string) (http.Handler, error) {
 	statusCodes := map[int]struct{}{}
-	for _, code := range config.FallbackOnStatusCodes {
-		parsedCode, err := strconv.Atoi(code)
+	for _, code := range strings.Split(config.FallbackOnStatusCodes, ",") {
+		parsedCode, err := strconv.Atoi(strings.TrimSpace(code))
 		if err != nil {
 			return nil, fmt.Errorf("invalid status code: %s", code)
 		}
@@ -42,12 +46,28 @@ func New(ctx context.Context, next http.Handler, config *Config, name string) (h
 		statusCodes[parsedCode] = struct{}{}
 	}
 
+	statusCode, err := strconv.Atoi(config.FallbackStatusCode)
+	if err != nil {
+		return nil, fmt.Errorf("invalid status code: %s", config.FallbackStatusCode)
+	}
+
+	timeout, err := time.ParseDuration(config.UpstreamTimeout)
+	if err != nil {
+		return nil, fmt.Errorf("invalid timeout: %s", config.UpstreamTimeout)
+	}
+
+	if timeout == 0 {
+		timeout = 3 * time.Second
+	}
+
 	return &Fallback{
-		fallbackURL:   config.FallbackURL,
-		next:          next,
-		name:          name,
-		fallbackCodes: statusCodes,
-		ctx:           ctx,
+		fallbackURL:        config.FallbackURL,
+		next:               next,
+		name:               name,
+		fallbackCodes:      statusCodes,
+		fallbackStatusCode: statusCode,
+		timeout:            timeout,
+		ctx:                ctx,
 	}, nil
 }
 
@@ -64,7 +84,7 @@ func (f *Fallback) handler() http.Handler {
 
 		recorder := httptest.NewRecorder()
 
-		ctx, cancel := context.WithTimeout(f.ctx, 3*time.Second)
+		ctx, cancel := context.WithTimeout(f.ctx, f.timeout)
 		hasResponse := false
 
 		go func() {
@@ -75,16 +95,27 @@ func (f *Fallback) handler() http.Handler {
 
 		_ = <-ctx.Done()
 
+		ctx = f.ctx // swap context
+
 		_, ok := f.fallbackCodes[recorder.Code]
 
-		if !hasResponse || ok {
-			rw.WriteHeader(200) // todo
-			//_, _ = rw.Write(recorder.Body.Bytes())
-			_, _ = rw.Write([]byte("hello"))
-		} else {
-			rw.WriteHeader(recorder.Code)
-			_, _ = rw.Write(recorder.Body.Bytes())
+		if !hasResponse || ok { // fallback
+			fallBackData, err := getFromURL(ctx, f.fallbackURL, f.timeout)
+			if err != nil {
+				rw.WriteHeader(http.StatusTeapot)
+				_, _ = rw.Write([]byte(err.Error()))
+				return
+			}
+
+			rw.WriteHeader(f.fallbackStatusCode)
+			_, _ = rw.Write(fallBackData.Body)
+			rw.Header().Set("Content-Type", fallBackData.ContentType)
+
+			return
 		}
+
+		rw.WriteHeader(recorder.Code)
+		_, _ = rw.Write(recorder.Body.Bytes())
 
 		targetHeaders := rw.Header()
 
