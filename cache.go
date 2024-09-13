@@ -18,15 +18,16 @@ func (c *CacheRecord) IsExpired() bool {
 	return time.Now().After(c.ExpiresAt)
 }
 
-var mapMut sync.Mutex
-var cache = make(map[string]*CacheRecord)
+var cache = sync.Map{}
 
 func getFromURL(
 	ctx context.Context,
 	targetURL string,
 	timeout time.Duration,
 ) (*CacheRecord, error) {
-	if cachedRecord, ok := cache[targetURL]; ok {
+	if rec, ok := cache.Load(targetURL); ok {
+		cachedRecord := rec.(*CacheRecord)
+
 		if !cachedRecord.IsExpired() {
 			return cachedRecord, nil
 		}
@@ -35,7 +36,9 @@ func getFromURL(
 	DefaultMutex.Lock(targetURL)
 	defer DefaultMutex.Unlock(targetURL)
 
-	if cachedRecord, ok := cache[targetURL]; ok {
+	if rec, ok := cache.Load(targetURL); ok {
+		cachedRecord := rec.(*CacheRecord)
+
 		if !cachedRecord.IsExpired() {
 			return cachedRecord, nil
 		}
@@ -71,9 +74,7 @@ func getFromURL(
 		ExpiresAt:   time.Now().Add(time.Minute),
 	}
 
-	mapMut.Lock()
-	cache[targetURL] = rec
-	defer mapMut.Unlock()
+	cache.Store(targetURL, rec)
 
 	return rec, nil
 }
