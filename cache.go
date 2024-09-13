@@ -11,20 +11,34 @@ import (
 type CacheRecord struct {
 	Body        []byte
 	ContentType string
+	ExpiresAt   time.Time
 }
 
-var mut = sync.Mutex{}
-var cachedRecord *CacheRecord
+func (c *CacheRecord) IsExpired() bool {
+	return time.Now().After(c.ExpiresAt)
+}
 
-func getFromURL(ctx context.Context, targetURL string, timeout time.Duration) (*CacheRecord, error) {
-	if cachedRecord != nil {
-		return cachedRecord, nil
+var mapMut sync.Mutex
+var cache = make(map[string]*CacheRecord)
+
+func getFromURL(
+	ctx context.Context,
+	targetURL string,
+	timeout time.Duration,
+) (*CacheRecord, error) {
+	if cachedRecord, ok := cache[targetURL]; ok {
+		if !cachedRecord.IsExpired() {
+			return cachedRecord, nil
+		}
 	}
 
-	mut.Lock()
-	defer mut.Unlock()
-	if cachedRecord != nil {
-		return cachedRecord, nil
+	DefaultMutex.Lock(targetURL)
+	defer DefaultMutex.Unlock(targetURL)
+
+	if cachedRecord, ok := cache[targetURL]; ok {
+		if !cachedRecord.IsExpired() {
+			return cachedRecord, nil
+		}
 	}
 
 	ctx, cancel := context.WithTimeout(ctx, timeout)
@@ -51,10 +65,15 @@ func getFromURL(ctx context.Context, targetURL string, timeout time.Duration) (*
 		return nil, err
 	}
 
-	cachedRecord = &CacheRecord{
+	rec := &CacheRecord{
 		Body:        body,
 		ContentType: resp.Header.Get("Content-Type"),
+		ExpiresAt:   time.Now().Add(time.Minute),
 	}
 
-	return cachedRecord, nil
+	mapMut.Lock()
+	cache[targetURL] = rec
+	defer mapMut.Unlock()
+
+	return rec, nil
 }

@@ -17,6 +17,7 @@ type Config struct {
 	FallbackStatusCode    string `json:"fallbackStatusCode"`
 	FallbackContentType   string `json:"fallbackContentType,omitempty"`
 	UpstreamTimeout       string `json:"upstreamTimeout,omitempty"`
+	CacheTTL              string `json:"cacheTTL,omitempty"`
 }
 
 // CreateConfig creates the default plugin configuration.
@@ -34,6 +35,7 @@ type Fallback struct {
 	fallbackStatusCode  int
 	timeout             time.Duration
 	fallbackContentType string
+	cacheTTL            time.Duration
 }
 
 // New created a new Demo plugin.
@@ -62,7 +64,7 @@ func New(ctx context.Context, next http.Handler, config *Config, name string) (h
 		timeout = 3 * time.Second
 	}
 
-	return &Fallback{
+	f := &Fallback{
 		fallbackURL:         config.FallbackURL,
 		next:                next,
 		name:                name,
@@ -71,7 +73,19 @@ func New(ctx context.Context, next http.Handler, config *Config, name string) (h
 		timeout:             timeout,
 		ctx:                 ctx,
 		fallbackContentType: config.FallbackContentType,
-	}, nil
+		cacheTTL:            3 * time.Minute,
+	}
+
+	if config.CacheTTL != "" {
+		cacheTTL, cacheErr := time.ParseDuration(config.CacheTTL)
+		if cacheErr != nil {
+			return nil, fmt.Errorf("invalid cacheTTL: %s", config.CacheTTL)
+		}
+
+		f.cacheTTL = cacheTTL
+	}
+
+	return f, nil
 }
 
 func (f *Fallback) ServeHTTP(writer http.ResponseWriter, request *http.Request) {
@@ -96,7 +110,7 @@ func (f *Fallback) handler() http.Handler {
 			cancel()
 		}()
 
-		_ = <-ctx.Done()
+		<-ctx.Done()
 
 		ctx = f.ctx // swap context
 
