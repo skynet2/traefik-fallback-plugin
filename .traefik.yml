@@ -8,6 +8,8 @@ summary: 'Traefik Fallback Plugin'
 
 testData:
   fallbackOnStatusCodes: "500,504"
-  fallbackURL: "http://fallback"
+  fallbackURL: "http://fallback/index.html"
   fallbackStatusCode: "201"
+  fallbackContentType: "text/html"
   upstreamTimeout: "10s"
+  cacheTTL: "60s"
