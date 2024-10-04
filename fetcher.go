@@ -12,10 +12,12 @@ type HttpFetcher struct {
 	timeout   time.Duration
 	cacheTTL  time.Duration
 	client    *http.Client
+	cache     Cache
 }
 
 func NewHttpFetcher(
 	client *http.Client,
+	cache Cache,
 	targetURL string,
 	cacheTTL time.Duration,
 	timeout time.Duration,
@@ -25,6 +27,7 @@ func NewHttpFetcher(
 		cacheTTL:  cacheTTL,
 		timeout:   timeout,
 		client:    client,
+		cache:     cache,
 	}
 }
 
@@ -35,22 +38,18 @@ func (h *HttpFetcher) CanFetch() bool {
 func (h *HttpFetcher) Fetch(
 	ctx context.Context,
 ) (*CacheRecord, error) {
-	if rec, ok := cache.Load(h.targetURL); ok {
-		cachedRecord := rec.(*CacheRecord)
-
-		if !cachedRecord.IsExpired() {
-			return cachedRecord, nil
+	if rec, ok := h.cache.Load(h.targetURL); ok {
+		if !rec.IsExpired() {
+			return rec, nil
 		}
 	}
 
 	DefaultMutex.Lock(h.targetURL)
 	defer DefaultMutex.Unlock(h.targetURL)
 
-	if rec, ok := cache.Load(h.targetURL); ok {
-		cachedRecord := rec.(*CacheRecord)
-
-		if !cachedRecord.IsExpired() {
-			return cachedRecord, nil
+	if rec, ok := h.cache.Load(h.targetURL); ok {
+		if !rec.IsExpired() {
+			return rec, nil
 		}
 	}
 
@@ -75,7 +74,7 @@ func (h *HttpFetcher) Fetch(
 
 	var bodyBytes []byte
 
-	if resp.Body != nil {
+	if resp.Body != nil && resp.ContentLength > 0 {
 		bodyBytes, err = io.ReadAll(resp.Body)
 		if err != nil {
 			return nil, err
@@ -88,7 +87,7 @@ func (h *HttpFetcher) Fetch(
 		ExpiresAt:   time.Now().Add(h.cacheTTL),
 	}
 
-	cache.Store(h.targetURL, rec)
+	h.cache.Store(h.targetURL, rec)
 
 	return rec, nil
 }

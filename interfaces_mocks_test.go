@@ -113,6 +113,104 @@ func (c *FetcherFetchCall) DoAndReturn(f func(context.Context) (*traefik_fallbac
 	return c
 }
 
+// MockCache is a mock of Cache interface.
+type MockCache struct {
+	ctrl     *gomock.Controller
+	recorder *MockCacheMockRecorder
+}
+
+// MockCacheMockRecorder is the mock recorder for MockCache.
+type MockCacheMockRecorder struct {
+	mock *MockCache
+}
+
+// NewMockCache creates a new mock instance.
+func NewMockCache(ctrl *gomock.Controller) *MockCache {
+	mock := &MockCache{ctrl: ctrl}
+	mock.recorder = &MockCacheMockRecorder{mock}
+	return mock
+}
+
+// EXPECT returns an object that allows the caller to indicate expected use.
+func (m *MockCache) EXPECT() *MockCacheMockRecorder {
+	return m.recorder
+}
+
+// Load mocks base method.
+func (m *MockCache) Load(key string) (*traefik_fallback_plugin.CacheRecord, bool) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "Load", key)
+	ret0, _ := ret[0].(*traefik_fallback_plugin.CacheRecord)
+	ret1, _ := ret[1].(bool)
+	return ret0, ret1
+}
+
+// Load indicates an expected call of Load.
+func (mr *MockCacheMockRecorder) Load(key interface{}) *CacheLoadCall {
+	mr.mock.ctrl.T.Helper()
+	call := mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Load", reflect.TypeOf((*MockCache)(nil).Load), key)
+	return &CacheLoadCall{Call: call}
+}
+
+// CacheLoadCall wrap *gomock.Call
+type CacheLoadCall struct {
+	*gomock.Call
+}
+
+// Return rewrite *gomock.Call.Return
+func (c *CacheLoadCall) Return(arg0 *traefik_fallback_plugin.CacheRecord, arg1 bool) *CacheLoadCall {
+	c.Call = c.Call.Return(arg0, arg1)
+	return c
+}
+
+// Do rewrite *gomock.Call.Do
+func (c *CacheLoadCall) Do(f func(string) (*traefik_fallback_plugin.CacheRecord, bool)) *CacheLoadCall {
+	c.Call = c.Call.Do(f)
+	return c
+}
+
+// DoAndReturn rewrite *gomock.Call.DoAndReturn
+func (c *CacheLoadCall) DoAndReturn(f func(string) (*traefik_fallback_plugin.CacheRecord, bool)) *CacheLoadCall {
+	c.Call = c.Call.DoAndReturn(f)
+	return c
+}
+
+// Store mocks base method.
+func (m *MockCache) Store(key string, value *traefik_fallback_plugin.CacheRecord) {
+	m.ctrl.T.Helper()
+	m.ctrl.Call(m, "Store", key, value)
+}
+
+// Store indicates an expected call of Store.
+func (mr *MockCacheMockRecorder) Store(key, value interface{}) *CacheStoreCall {
+	mr.mock.ctrl.T.Helper()
+	call := mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Store", reflect.TypeOf((*MockCache)(nil).Store), key, value)
+	return &CacheStoreCall{Call: call}
+}
+
+// CacheStoreCall wrap *gomock.Call
+type CacheStoreCall struct {
+	*gomock.Call
+}
+
+// Return rewrite *gomock.Call.Return
+func (c *CacheStoreCall) Return() *CacheStoreCall {
+	c.Call = c.Call.Return()
+	return c
+}
+
+// Do rewrite *gomock.Call.Do
+func (c *CacheStoreCall) Do(f func(string, *traefik_fallback_plugin.CacheRecord)) *CacheStoreCall {
+	c.Call = c.Call.Do(f)
+	return c
+}
+
+// DoAndReturn rewrite *gomock.Call.DoAndReturn
+func (c *CacheStoreCall) DoAndReturn(f func(string, *traefik_fallback_plugin.CacheRecord)) *CacheStoreCall {
+	c.Call = c.Call.DoAndReturn(f)
+	return c
+}
+
 // MockTransport is a mock of Transport interface.
 type MockTransport struct {
 	ctrl     *gomock.Controller

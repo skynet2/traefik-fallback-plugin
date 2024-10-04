@@ -88,7 +88,15 @@ func New(ctx context.Context, next http.Handler, config *Config, name string) (h
 		cacheTTL = parsedTTL
 	}
 
-	f.fetcher = NewHttpFetcher(http.DefaultClient, config.FallbackURL, cacheTTL, f.timeout)
+	cache := NewDefaultCache()
+
+	f.fetcher = NewHttpFetcher(
+		http.DefaultClient,
+		cache,
+		config.FallbackURL,
+		cacheTTL,
+		f.timeout,
+	)
 
 	return f, nil
 }

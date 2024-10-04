@@ -12,6 +12,11 @@ type Fetcher interface {
 	CanFetch() bool
 }
 
+type Cache interface {
+	Load(key string) (*CacheRecord, bool)
+	Store(key string, value *CacheRecord)
+}
+
 type Transport interface {
 	http.RoundTripper
 }

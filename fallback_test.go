@@ -53,7 +53,7 @@ func TestNewFallbackInvalidCacheTTL(t *testing.T) {
 func TestFallbackServeHTTPWithoutFallback(t *testing.T) {
 	handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusOK)
-		w.Write([]byte("ok"))
+		_, _ = w.Write([]byte("ok"))
 	})
 
 	fallback, err := traefik_fallback_plugin.New(
@@ -73,6 +73,70 @@ func TestFallbackServeHTTPWithoutFallback(t *testing.T) {
 
 	assert.Equal(t, http.StatusOK, rec.Code)
 	assert.Equal(t, "ok", rec.Body.String())
+}
+
+func TestSuccessLoad(t *testing.T) {
+	handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusOK)
+		w.Header().Set("Sunset", "X1")
+		_, _ = w.Write([]byte("ok"))
+	})
+
+	fallback, err := traefik_fallback_plugin.New(
+		context.Background(),
+		handler,
+		&traefik_fallback_plugin.Config{
+			FallbackOnStatusCodes: "201",
+			FallbackStatusCode:    "409",
+			FallbackURL:           "https://localhost:123",
+		}, "test",
+	)
+	assert.NoError(t, err)
+
+	req := httptest.NewRequest(http.MethodGet, "/", nil)
+	rec := httptest.NewRecorder()
+
+	fallback.ServeHTTP(rec, req)
+
+	assert.Equal(t, http.StatusOK, rec.Code)
+	assert.Equal(t, "ok", rec.Body.String())
+	assert.EqualValues(t, "X1", rec.Header().Get("Sunset"))
+}
+
+func TestPanic(t *testing.T) {
+	handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		panic("oops")
+	})
+
+	fallback, err := traefik_fallback_plugin.New(
+		context.Background(),
+		handler,
+		&traefik_fallback_plugin.Config{
+			FallbackOnStatusCodes: "201",
+			FallbackStatusCode:    "202",
+			FallbackURL:           "https://localhost:123",
+		}, "test",
+	)
+
+	assert.NoError(t, err)
+
+	mockFetcher := NewMockFetcher(gomock.NewController(t))
+	fallback.(*traefik_fallback_plugin.Fallback).SetFetcher(mockFetcher)
+
+	mockFetcher.EXPECT().CanFetch().Return(true)
+	mockFetcher.EXPECT().Fetch(gomock.Any()).
+		Return(&traefik_fallback_plugin.CacheRecord{
+			Body:        []byte("hello"),
+			ContentType: "application/xx",
+		}, nil)
+
+	req := httptest.NewRequest(http.MethodGet, "/", nil)
+	rec := httptest.NewRecorder()
+
+	fallback.ServeHTTP(rec, req)
+
+	assert.Equal(t, http.StatusAccepted, rec.Code)
+	assert.Equal(t, "hello", rec.Body.String())
 }
 
 func TestFallbackServeHTTPWithFallback(t *testing.T) {
