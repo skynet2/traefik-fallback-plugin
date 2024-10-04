@@ -3,6 +3,7 @@ package traefik_fallback_plugin
 import (
 	"context"
 	"fmt"
+	"log"
 	"net/http"
 	"net/http/httptest"
 	"strconv"
@@ -87,7 +88,7 @@ func New(ctx context.Context, next http.Handler, config *Config, name string) (h
 		cacheTTL = parsedTTL
 	}
 
-	f.fetcher = NewHttpFetcher(config.FallbackURL, cacheTTL, f.timeout)
+	f.fetcher = NewHttpFetcher(http.DefaultClient, config.FallbackURL, cacheTTL, f.timeout)
 
 	return f, nil
 }
@@ -113,9 +114,16 @@ func (f *Fallback) handler() http.Handler {
 		hasResponse := false
 
 		go func() {
+			defer cancel()
+			defer func() {
+				if r := recover(); r != nil {
+					log.Printf("panic: %+v", r)
+				}
+			}()
+
+			req = req.WithContext(ctx)
 			f.next.ServeHTTP(recorder, req)
 			hasResponse = true
-			cancel()
 		}()
 
 		<-ctx.Done()
@@ -140,7 +148,9 @@ func (f *Fallback) handler() http.Handler {
 				rw.Header().Set("Content-Type", fallBackData.ContentType)
 			}
 
-			_, _ = rw.Write(fallBackData.Body)
+			if fallBackData.Body != nil {
+				_, _ = rw.Write(fallBackData.Body)
+			}
 
 			return
 		}
@@ -150,6 +160,9 @@ func (f *Fallback) handler() http.Handler {
 		}
 
 		rw.WriteHeader(recorder.Code)
-		_, _ = rw.Write(recorder.Body.Bytes())
+
+		if recorder.Body != nil {
+			_, _ = rw.Write(recorder.Body.Bytes())
+		}
 	})
 }

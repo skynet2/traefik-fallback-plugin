@@ -11,9 +11,11 @@ type HttpFetcher struct {
 	targetURL string
 	timeout   time.Duration
 	cacheTTL  time.Duration
+	client    *http.Client
 }
 
 func NewHttpFetcher(
+	client *http.Client,
 	targetURL string,
 	cacheTTL time.Duration,
 	timeout time.Duration,
@@ -22,6 +24,7 @@ func NewHttpFetcher(
 		targetURL: targetURL,
 		cacheTTL:  cacheTTL,
 		timeout:   timeout,
+		client:    client,
 	}
 }
 
@@ -59,7 +62,7 @@ func (h *HttpFetcher) Fetch(
 		return nil, err
 	}
 
-	resp, err := http.DefaultClient.Do(req)
+	resp, err := h.client.Do(req)
 	if err != nil {
 		return nil, err
 	}
@@ -70,13 +73,17 @@ func (h *HttpFetcher) Fetch(
 		}
 	}()
 
-	body, err := io.ReadAll(resp.Body)
-	if err != nil {
-		return nil, err
+	var bodyBytes []byte
+
+	if resp.Body != nil {
+		bodyBytes, err = io.ReadAll(resp.Body)
+		if err != nil {
+			return nil, err
+		}
 	}
 
 	rec := &CacheRecord{
-		Body:        body,
+		Body:        bodyBytes,
 		ContentType: resp.Header.Get("Content-Type"),
 		ExpiresAt:   time.Now().Add(h.cacheTTL),
 	}

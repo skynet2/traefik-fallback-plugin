@@ -6,6 +6,7 @@ package traefik_fallback_plugin_test
 
 import (
 	context "context"
+	http "net/http"
 	reflect "reflect"
 
 	gomock "github.com/golang/mock/gomock"
@@ -108,6 +109,68 @@ func (c *FetcherFetchCall) Do(f func(context.Context) (*traefik_fallback_plugin.
 
 // DoAndReturn rewrite *gomock.Call.DoAndReturn
 func (c *FetcherFetchCall) DoAndReturn(f func(context.Context) (*traefik_fallback_plugin.CacheRecord, error)) *FetcherFetchCall {
+	c.Call = c.Call.DoAndReturn(f)
+	return c
+}
+
+// MockTransport is a mock of Transport interface.
+type MockTransport struct {
+	ctrl     *gomock.Controller
+	recorder *MockTransportMockRecorder
+}
+
+// MockTransportMockRecorder is the mock recorder for MockTransport.
+type MockTransportMockRecorder struct {
+	mock *MockTransport
+}
+
+// NewMockTransport creates a new mock instance.
+func NewMockTransport(ctrl *gomock.Controller) *MockTransport {
+	mock := &MockTransport{ctrl: ctrl}
+	mock.recorder = &MockTransportMockRecorder{mock}
+	return mock
+}
+
+// EXPECT returns an object that allows the caller to indicate expected use.
+func (m *MockTransport) EXPECT() *MockTransportMockRecorder {
+	return m.recorder
+}
+
+// RoundTrip mocks base method.
+func (m *MockTransport) RoundTrip(arg0 *http.Request) (*http.Response, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "RoundTrip", arg0)
+	ret0, _ := ret[0].(*http.Response)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// RoundTrip indicates an expected call of RoundTrip.
+func (mr *MockTransportMockRecorder) RoundTrip(arg0 interface{}) *TransportRoundTripCall {
+	mr.mock.ctrl.T.Helper()
+	call := mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "RoundTrip", reflect.TypeOf((*MockTransport)(nil).RoundTrip), arg0)
+	return &TransportRoundTripCall{Call: call}
+}
+
+// TransportRoundTripCall wrap *gomock.Call
+type TransportRoundTripCall struct {
+	*gomock.Call
+}
+
+// Return rewrite *gomock.Call.Return
+func (c *TransportRoundTripCall) Return(arg0 *http.Response, arg1 error) *TransportRoundTripCall {
+	c.Call = c.Call.Return(arg0, arg1)
+	return c
+}
+
+// Do rewrite *gomock.Call.Do
+func (c *TransportRoundTripCall) Do(f func(*http.Request) (*http.Response, error)) *TransportRoundTripCall {
+	c.Call = c.Call.Do(f)
+	return c
+}
+
+// DoAndReturn rewrite *gomock.Call.DoAndReturn
+func (c *TransportRoundTripCall) DoAndReturn(f func(*http.Request) (*http.Response, error)) *TransportRoundTripCall {
 	c.Call = c.Call.DoAndReturn(f)
 	return c
 }
