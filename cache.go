@@ -1,9 +1,6 @@
 package traefik_fallback_plugin
 
 import (
-	"context"
-	"io"
-	"net/http"
 	"sync"
 	"time"
 )
@@ -18,63 +15,30 @@ func (c *CacheRecord) IsExpired() bool {
 	return time.Now().After(c.ExpiresAt)
 }
 
-var cache = sync.Map{}
+type DefaultCache struct {
+	cache *sync.Map
+}
 
-func getFromURL(
-	ctx context.Context,
-	targetURL string,
-	timeout time.Duration,
-) (*CacheRecord, error) {
-	if rec, ok := cache.Load(targetURL); ok {
-		cachedRecord := rec.(*CacheRecord)
+func NewDefaultCache() *DefaultCache {
+	return &DefaultCache{
+		cache: &sync.Map{},
+	}
+}
 
-		if !cachedRecord.IsExpired() {
-			return cachedRecord, nil
-		}
+func (c *DefaultCache) Load(key string) (*CacheRecord, bool) {
+	rec, ok := c.cache.Load(key)
+	if !ok {
+		return nil, false
 	}
 
-	DefaultMutex.Lock(targetURL)
-	defer DefaultMutex.Unlock(targetURL)
-
-	if rec, ok := cache.Load(targetURL); ok {
-		cachedRecord := rec.(*CacheRecord)
-
-		if !cachedRecord.IsExpired() {
-			return cachedRecord, nil
-		}
+	converted, ok := rec.(*CacheRecord)
+	if !ok {
+		return nil, false
 	}
 
-	ctx, cancel := context.WithTimeout(ctx, timeout)
-	defer cancel()
+	return converted, ok
+}
 
-	req, err := http.NewRequestWithContext(ctx, http.MethodGet, targetURL, nil)
-	if err != nil {
-		return nil, err
-	}
-
-	resp, err := http.DefaultClient.Do(req)
-	if err != nil {
-		return nil, err
-	}
-
-	defer func() {
-		if resp.Body != nil {
-			_ = resp.Body.Close()
-		}
-	}()
-
-	body, err := io.ReadAll(resp.Body)
-	if err != nil {
-		return nil, err
-	}
-
-	rec := &CacheRecord{
-		Body:        body,
-		ContentType: resp.Header.Get("Content-Type"),
-		ExpiresAt:   time.Now().Add(time.Minute),
-	}
-
-	cache.Store(targetURL, rec)
-
-	return rec, nil
+func (c *DefaultCache) Store(key string, value *CacheRecord) {
+	c.cache.Store(key, value)
 }

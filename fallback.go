@@ -3,6 +3,7 @@ package traefik_fallback_plugin
 import (
 	"context"
 	"fmt"
+	"log"
 	"net/http"
 	"net/http/httptest"
 	"strconv"
@@ -29,13 +30,12 @@ func CreateConfig() *Config {
 type Fallback struct {
 	next                http.Handler
 	name                string
-	fallbackURL         string
 	fallbackCodes       map[int]struct{}
 	ctx                 context.Context
 	fallbackStatusCode  int
 	timeout             time.Duration
 	fallbackContentType string
-	cacheTTL            time.Duration
+	fetcher             Fetcher
 }
 
 // New created a new Demo plugin.
@@ -50,42 +50,59 @@ func New(ctx context.Context, next http.Handler, config *Config, name string) (h
 		statusCodes[parsedCode] = struct{}{}
 	}
 
-	statusCode, err := strconv.Atoi(config.FallbackStatusCode)
-	if err != nil {
-		return nil, fmt.Errorf("invalid fallback status code: %s", config.FallbackStatusCode)
-	}
-
-	timeout, err := time.ParseDuration(config.UpstreamTimeout)
-	if err != nil {
-		return nil, fmt.Errorf("invalid timeout: %s", config.UpstreamTimeout)
-	}
-
-	if timeout == 0 {
-		timeout = 3 * time.Second
-	}
-
 	f := &Fallback{
-		fallbackURL:         config.FallbackURL,
 		next:                next,
 		name:                name,
 		fallbackCodes:       statusCodes,
-		fallbackStatusCode:  statusCode,
-		timeout:             timeout,
+		fallbackStatusCode:  http.StatusOK,
+		timeout:             3 * time.Second,
 		ctx:                 ctx,
 		fallbackContentType: config.FallbackContentType,
-		cacheTTL:            3 * time.Minute,
 	}
 
+	if config.FallbackStatusCode != "" {
+		statusCode, statusCodeErr := strconv.Atoi(config.FallbackStatusCode)
+		if statusCodeErr != nil {
+			return nil, fmt.Errorf("invalid fallback status code: %s", config.FallbackStatusCode)
+		}
+
+		f.fallbackStatusCode = statusCode
+	}
+
+	if config.UpstreamTimeout != "" {
+		timeout, timeoutErr := time.ParseDuration(config.UpstreamTimeout)
+		if timeoutErr != nil {
+			return nil, fmt.Errorf("invalid timeout: %s", config.UpstreamTimeout)
+		}
+
+		f.timeout = timeout
+	}
+
+	cacheTTL := 1 * time.Minute
 	if config.CacheTTL != "" {
-		cacheTTL, cacheErr := time.ParseDuration(config.CacheTTL)
+		parsedTTL, cacheErr := time.ParseDuration(config.CacheTTL)
 		if cacheErr != nil {
 			return nil, fmt.Errorf("invalid cacheTTL: %s", config.CacheTTL)
 		}
 
-		f.cacheTTL = cacheTTL
+		cacheTTL = parsedTTL
 	}
 
+	cache := NewDefaultCache()
+
+	f.fetcher = NewHttpFetcher(
+		http.DefaultClient,
+		cache,
+		config.FallbackURL,
+		cacheTTL,
+		f.timeout,
+	)
+
 	return f, nil
+}
+
+func (f *Fallback) SetFetcher(fetcher Fetcher) {
+	f.fetcher = fetcher
 }
 
 func (f *Fallback) ServeHTTP(writer http.ResponseWriter, request *http.Request) {
@@ -94,7 +111,7 @@ func (f *Fallback) ServeHTTP(writer http.ResponseWriter, request *http.Request) 
 
 func (f *Fallback) handler() http.Handler {
 	return http.HandlerFunc(func(rw http.ResponseWriter, req *http.Request) {
-		if f.fallbackURL == "" || len(f.fallbackCodes) == 0 {
+		if !f.fetcher.CanFetch() || len(f.fallbackCodes) == 0 {
 			f.next.ServeHTTP(rw, req)
 			return
 		}
@@ -105,9 +122,16 @@ func (f *Fallback) handler() http.Handler {
 		hasResponse := false
 
 		go func() {
+			defer cancel()
+			defer func() {
+				if r := recover(); r != nil {
+					log.Printf("panic: %+v", r)
+				}
+			}()
+
+			req = req.WithContext(ctx)
 			f.next.ServeHTTP(recorder, req)
 			hasResponse = true
-			cancel()
 		}()
 
 		<-ctx.Done()
@@ -117,7 +141,7 @@ func (f *Fallback) handler() http.Handler {
 		_, ok := f.fallbackCodes[recorder.Code]
 
 		if !hasResponse || ok { // fallback
-			fallBackData, err := getFromURL(ctx, f.fallbackURL, f.timeout)
+			fallBackData, err := f.fetcher.Fetch(ctx)
 			if err != nil {
 				rw.WriteHeader(http.StatusTeapot)
 				_, _ = rw.Write([]byte(err.Error()))
@@ -128,11 +152,13 @@ func (f *Fallback) handler() http.Handler {
 
 			if f.fallbackContentType != "" {
 				rw.Header().Set("Content-Type", f.fallbackContentType)
-			} else {
+			} else if fallBackData.ContentType != "" {
 				rw.Header().Set("Content-Type", fallBackData.ContentType)
 			}
 
-			_, _ = rw.Write(fallBackData.Body)
+			if fallBackData.Body != nil {
+				_, _ = rw.Write(fallBackData.Body)
+			}
 
 			return
 		}
@@ -142,6 +168,9 @@ func (f *Fallback) handler() http.Handler {
 		}
 
 		rw.WriteHeader(recorder.Code)
-		_, _ = rw.Write(recorder.Body.Bytes())
+
+		if recorder.Body != nil {
+			_, _ = rw.Write(recorder.Body.Bytes())
+		}
 	})
 }
